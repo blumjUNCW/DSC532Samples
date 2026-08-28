@@ -91,3 +91,34 @@ ods trace off;
 ods select none;
 /*don't want to read output tables*/
 %cases;
+
+ods select all;
+proc sgpanel data=allfits;
+  panelby vars depth / layout=lattice;
+  where inbag eq 0.6 and treeAmount=75;
+  series x=NTrees y=predOob;
+  series x=NTrees y=predAll;
+  rowaxis grid;
+  colaxis grid;
+run;
+
+proc sort data=allfits;
+    by inbag treeAmount vars depth;
+run;
+
+proc sgpanel data=allfits;
+  by inbag TreeAmount;
+  panelby vars depth / layout=lattice;
+  series x=NTrees y=predOob;
+  series x=NTrees y=predAll;
+  rowaxis grid;
+  colaxis grid;
+run;
+
+proc sort data=allVI;
+    by inbag treeAmount vars depth;
+run;
+
+proc sgplot data=allVI;
+  hbox mseOOB / category=variable;
+run;
