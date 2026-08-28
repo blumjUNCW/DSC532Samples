@@ -15,8 +15,9 @@ run;
 %mend;
 
 ods trace on;
-%hpforest(library=SASData,table=cdi,quant=land--hs_grad poverty--inc_tot,
-          cat=region,target=ba_bs,TargetType=interval);
+options nomprint symbolgen;
+%hpforest(TargetType=interval,target=ba_bs,library=SASData,table=cdi,quant=land--hs_grad poverty--inc_tot,
+          cat=region);
 
 
 %macro hpforestbase(vars,trees,inbag,depth,select,
@@ -34,54 +35,59 @@ proc hpforest data=&library..&table
 run;
 %mend;
 
-%macro cases(varToTry=4 6 8, treeAmt=60 80 100, inbagProp=.6 .7 .8, TreeDepths=10 15 20,
+%macro cases(varToTry=4 6, treeAmt=75 100, inbagProp=.6 .8, TreeDepths=10 20,
             select=binnedsearch, library=SASData,table=cdi,quant=land--hs_grad poverty--inc_tot,
             cat=region,target=ba_bs,TargetType=interval);
+     proc datasets lib=work kill;
+     run; /*clean out the work library*/
      %let c1 = 1; /*varToTry counter*/
      %let vt = %scan(&varToTry,&c1);
-     %do %until(&vt eq );
+     %do %until(&vt eq );/*Start of Variables to try loop*/
       %let c2 = 1; /*TreeAmt counter*/
       %let tA = %scan(&treeAmt,&c2);
-      %do %until(&ta eq );
+      %do %until(&ta eq );/*Start number of trees loop*/
         %let c3 = 1; /*InBagProp counter*/
         %let IB = %scan(&InBagProp,&c3,%str( ));
-        %do %until(&IB eq );
+        %do %until(&IB eq );/*In bag proportion loop start*/
           %let c4 = 1; /*TreeDepth counter*/
           %let TD = %scan(&TreeDepths,&c4);
-          %do %until(&TD eq );
+          %do %until(&TD eq );/*Tree depth loop start*/
             %hpforestbase(&vt,&ta,&IB,&TD,&select,&library,&table,&quant,&cat,&target,&targetType);
+              /*Ask for the forest...*/
             data fit;
               set fit;
               depth=&TD;
               InBag=&IB;
-              TreeDepth=&TD;
+              TreeAmount=&TA;
               Vars=&VT;
-            run;
+            run;/*update the fit data to include the parameter choices for that case*/
             proc append base=AllFits data=fit;
-            run;
+            run;/*Add that data to the full fit data set*/
             data vi;
               set vi;
               depth=&TD;
               InBag=&IB;
-              TreeDepth=&TD;
+              TreeAmount=&TA;
               Vars=&VT;
             run;
             proc append base=AllVI data=VI;
-            run;              
+            run;/*same with variable importance*/              
             %let c4 = %eval(&c4+1);
             %let TD = %scan(&TreeDepths,&c4);
-          %end;
+          %end;/*Tree depth loop end*/
           %let c3 = %eval(&c3+1);        
           %let IB = %scan(&InBagProp,&c3,%str( ));
-        %end;
+        %end;/*In bag proportion loop end*/
         %let c2 = %eval(&c2+1);
         %let tA = %scan(&treeAmt,&c2);
-      %end;
+      %end;/*End number of trees loop*/
       %let c1 = %eval(&c1+1);
       %let vt = %scan(&varToTry,&c1);
-     %end;
+     %end;/*End of Variables to try loop*/
 %mend;
 options nomprint nomlogic nosymbolgen nonotes;
-ods select none;
 ods trace off;
+/**If it's running well, minimize the log */
+ods select none;
+/*don't want to read output tables*/
 %cases;
