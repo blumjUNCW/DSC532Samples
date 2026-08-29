@@ -35,9 +35,9 @@ proc hpforest data=&library..&table
 run;
 %mend;
 
-%macro cases(varToTry=4 6, treeAmt=75 100, inbagProp=.6 .8, TreeDepths=10 20,
-            select=binnedsearch, library=SASData,table=cdi,quant=land--hs_grad poverty--inc_tot,
-            cat=region,target=ba_bs,TargetType=interval);
+%macro cases(varToTry=2 4 6, treeAmt=60 80 100 , inbagProp=.6 .7 .8, 
+             TreeDepths=10 20 30, select=binnedsearch, 
+             library=,table=,quant=,cat=,target=,TargetType=);
      proc datasets lib=work kill;
      run; /*clean out the work library*/
      %let c1 = 1; /*varToTry counter*/
@@ -90,7 +90,8 @@ ods trace off;
 /**If it's running well, minimize the log */
 ods select none;
 /*don't want to read output tables*/
-%cases;
+%cases(library=SASData,table=cdi,quant=land--hs_grad poverty--inc_tot,
+            cat=region,target=ba_bs,TargetType=interval);
 
 ods select all;
 proc sgpanel data=allfits;
