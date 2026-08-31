@@ -1,11 +1,12 @@
 
-%macro hpforestbase(vars,trees,inbag,depth,select,
+%macro hpforestbase(vars,trees,inbag,depth,leaf,select,
                 library,table,quant,cat,target,targetType);
 proc hpforest data=&library..&table 
               vars_to_try=&vars
               maxtrees=&trees
               inbagfraction=&inBag
               maxdepth=&depth
+              leafsize=&leaf
               preselect=&select;
   target &target / Level=&TargetType;
   input &quant / Level=interval;
@@ -15,7 +16,7 @@ run;
 %mend;
 
 %macro cases(varToTry=2 4 6, treeAmt=60 80 100, inbagProp=.5 .6 .7, 
-             TreeDepths=5 10 20, select=binnedsearch, 
+             TreeDepths=5 10 20, leafsizes=1 2 4, select=binnedsearch, 
              library=,table=,quant=,cat=,target=,TargetType=);
      proc datasets lib=work;
       delete AllFits AllVI;
@@ -32,26 +33,34 @@ run;
           %let c4 = 1; /*TreeDepth counter*/
           %let TD = %scan(&TreeDepths,&c4);
           %do %until(&TD eq );/*Tree depth loop start*/
-            %hpforestbase(&vt,&ta,&IB,&TD,&select,&library,&table,&quant,&cat,&target,&targetType);
-              /*Ask for the forest...*/
-            data fit;
-              set fit;
-              depth=&TD;
-              InBag=&IB;
-              TreeAmount=&TA;
-              Vars=&VT;
-            run;/*update the fit data to include the parameter choices for that case*/
-            proc append base=AllFits data=fit;
-            run;/*Add that data to the full fit data set*/
-            data vi;
-              set vi;
-              depth=&TD;
-              InBag=&IB;
-              TreeAmount=&TA;
-              Vars=&VT;
-            run;
-            proc append base=AllVI data=VI;
-            run;/*same with variable importance*/              
+            %let c5 = 1; /*TreeDepth counter*/
+            %let ls = %scan(&leafsizes,&c5);
+            %do %until(&ls eq );/*Tree depth loop start*/
+              %hpforestbase(&vt,&ta,&IB,&TD,&ls,&select,&library,&table,&quant,&cat,&target,&targetType);
+                /*Ask for the forest...*/
+              data fit;
+                set fit;
+                depth=&TD;
+                InBag=&IB;
+                TreeAmount=&TA;
+                Vars=&VT;
+                leafSize=&ls;
+              run;/*update the fit data to include the parameter choices for that case*/
+              proc append base=AllFits data=fit;
+              run;/*Add that data to the full fit data set*/
+              data vi;
+                set vi;
+                depth=&TD;
+                InBag=&IB;
+                TreeAmount=&TA;
+                Vars=&VT;
+                leafSize=&ls;
+              run;
+              proc append base=AllVI data=VI;
+              run;/*same with variable importance*/              
+              %let c5 = %eval(&c5+1);
+              %let ls = %scan(&leafsizes,&c5);
+            %end;/*Tree depth loop end*/
             %let c4 = %eval(&c4+1);
             %let TD = %scan(&TreeDepths,&c4);
           %end;/*Tree depth loop end*/
@@ -66,13 +75,13 @@ run;
      %end;/*End of Variables to try loop*/
 
      proc sort data=allfits;
-          by treeAmount inbag vars depth;
+          by treeAmount inbag vars depth leafSize;
       run;
 
       ods select all;
       proc sgpanel data=allfits;
-        by inbag TreeAmount;
-        panelby vars depth / layout=lattice;
+        by inbag TreeAmount vars;
+        panelby depth leafSize / layout=lattice;
         series x=NTrees y=predOob;
         series x=NTrees y=predAll;
         rowaxis grid;
