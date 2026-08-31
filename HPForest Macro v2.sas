@@ -74,7 +74,7 @@ run;
       %let vt = %scan(&varToTry,&c1);
      %end;/*End of Variables to try loop*/
 
-     proc sort data=allfits;
+      proc sort data=allfits;
           by treeAmount inbag vars depth leafSize;
       run;
 
@@ -121,3 +121,18 @@ run;
 ods select none;
 %cases(library=work,table=cdi,quant=land--inc_per_cap popDensity--hospitalPerCap,
         target=region,TargetType=nominal,treeAMT=80);
+
+
+proc sort data=allfits;
+    by treeAmount inbag depth vars leafSize;
+run;
+
+ods select all;
+proc sgpanel data=allfits;
+  by treeAmount inbag depth;
+  panelby vars leafSize / layout=lattice;
+  series x=NTrees y=predOob;
+  series x=NTrees y=predAll;
+  rowaxis grid;
+  colaxis grid;
+run;
