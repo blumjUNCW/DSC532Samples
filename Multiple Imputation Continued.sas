@@ -123,21 +123,23 @@ proc mi data=predictors2 out=predImputed2 seed=2468;
   fcs reg(boardamt = board control hloffer sa09mct sa09mot tuition3 roomamt);
 run;
 
-/* proc mi data=predictors2 out=predImputed2 seed=2468; */
-/*   class iclevel control hloffer instcat room board; */
-/*   var iclevel control hloffer instcat room board tuition3 roomamt boardamt  */
-/*           sa09mct sa09mot; */
-/*   fcs reg(tuition3 = control sa09mct sa09mot); */
-/*   /**I can also make these sequential... */ */
-/*   fcs reg(roomamt =  control sa09mct sa09mot tuition3); */
-/*   fcs reg(boardamt =  control sa09mct sa09mot tuition3 roomamt); */
-/* run; */
+proc mi data=predictors2 out=predImputed2 seed=2468;
+  class iclevel control hloffer instcat room board;
+  var iclevel control hloffer instcat room board tuition3 roomamt boardamt 
+          sa09mct sa09mot;
+  fcs reg(tuition3 = control sa09mct sa09mot);
+  /**I can also make these sequential... */
+  fcs reg(roomamt =  control sa09mct sa09mot tuition3);
+  fcs reg(boardamt =  control sa09mct sa09mot tuition3 roomamt);
+run;
 
 /**Bring in the graduation rates/categories and fit a model (or a selection run)
   for each imputation and see what kind of variation that introduces into
   my predictive model
   
-  Bring in grad rates/categories, do some regression, analyze (PROC MIANALYZE)*/
+  Bring in grad rates/categories, do some regression, analyze (PROC MIANALYZE)
+*/
+
 
 proc sort data=IPEDS.graduation out=grads;
   by unitID descending Group;
