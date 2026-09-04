@@ -123,18 +123,40 @@ proc mi data=predictors2 out=predImputed2 seed=2468;
   fcs reg(boardamt = board control hloffer sa09mct sa09mot tuition3 roomamt);
 run;
 
-proc mi data=predictors2 out=predImputed2 seed=2468;
-  class iclevel control hloffer instcat room board;
-  var iclevel control hloffer instcat room board tuition3 roomamt boardamt 
-          sa09mct sa09mot;
-  fcs reg(tuition3 = control sa09mct sa09mot);
-  /**I can also make these sequential... */
-  fcs reg(roomamt =  control sa09mct sa09mot tuition3);
-  fcs reg(boardamt =  control sa09mct sa09mot tuition3 roomamt);
-run;
+/* proc mi data=predictors2 out=predImputed2 seed=2468; */
+/*   class iclevel control hloffer instcat room board; */
+/*   var iclevel control hloffer instcat room board tuition3 roomamt boardamt  */
+/*           sa09mct sa09mot; */
+/*   fcs reg(tuition3 = control sa09mct sa09mot); */
+/*   /**I can also make these sequential... */ */
+/*   fcs reg(roomamt =  control sa09mct sa09mot tuition3); */
+/*   fcs reg(boardamt =  control sa09mct sa09mot tuition3 roomamt); */
+/* run; */
 
 /**Bring in the graduation rates/categories and fit a model (or a selection run)
   for each imputation and see what kind of variation that introduces into
   my predictive model
   
   Bring in grad rates/categories, do some regression, analyze (PROC MIANALYZE)*/
+
+proc sort data=IPEDS.graduation out=grads;
+  by unitID descending Group;
+run;
+  
+data GradRates;
+  set grads;
+  by unitID descending Group;
+  retain incoming;
+  /**RETAIN variable(s); Retain the value across reads of records
+      from the data set (usually only applied to variables we create)*/
+
+  if first.unitID then Incoming = total;
+    /**Get incoming from the first one...*/
+
+  if last.unitID then do;/*for the last, do the computation and output*/
+    Completers = total;
+    GradRate = Completers/Incoming;
+    output;
+  end;
+  keep unitID incoming Completers GradRate;
+run;
