@@ -123,15 +123,14 @@ proc mi data=predictors2 out=predImputed2 seed=2468;
   fcs reg(boardamt = board control hloffer sa09mct sa09mot tuition3 roomamt);
 run;
 
-proc mi data=predictors2 out=predImputed2 seed=2468;
-  class iclevel control hloffer instcat room board;
-  var iclevel control hloffer instcat room board tuition3 roomamt boardamt 
-          sa09mct sa09mot;
-  fcs reg(tuition3 = control sa09mct sa09mot);
-  /**I can also make these sequential... */
-  fcs reg(roomamt =  control sa09mct sa09mot tuition3);
-  fcs reg(boardamt =  control sa09mct sa09mot tuition3 roomamt);
-run;
+/* proc mi data=predictors2 out=predImputed2 seed=2468; */
+/*   class iclevel control hloffer instcat room board; */
+/*   var iclevel control hloffer instcat room board tuition3 roomamt boardamt  */
+/*           sa09mct sa09mot; */
+/*   fcs reg(tuition3 = control sa09mct sa09mot); */
+/*   fcs reg(roomamt =  control sa09mct sa09mot tuition3); */
+/*   fcs reg(boardamt =  control sa09mct sa09mot tuition3 roomamt); */
+/* run; */
 
 /**Bring in the graduation rates/categories and fit a model (or a selection run)
   for each imputation and see what kind of variation that introduces into
@@ -149,16 +148,77 @@ data GradRates;
   set grads;
   by unitID descending Group;
   retain incoming;
-  /**RETAIN variable(s); Retain the value across reads of records
-      from the data set (usually only applied to variables we create)*/
 
   if first.unitID then Incoming = total;
-    /**Get incoming from the first one...*/
 
-  if last.unitID then do;/*for the last, do the computation and output*/
+  if last.unitID then do;
     Completers = total;
     GradRate = Completers/Incoming;
     output;
   end;
   keep unitID incoming Completers GradRate;
+run;
+
+proc sql;
+  create table use as 
+    select * 
+    from gradRates, predImputed2 as pred
+    where gradRates.UnitID eq pred.UnitID
+    order by _imputation_, unitID
+    ;
+quit;
+
+proc glmselect data=use;
+  by _imputation_;
+  class iclevel control hloffer instcat c21enprf room board;
+  model gradRate =  iclevel control hloffer instcat c21enprf room board
+                      tuition3 roomamt boardamt sa09mct sa09mot / 
+        selection=stepwise(select=aic choose=sbc);
+run;/**Lots of output across 25 imputations ... */
+
+ods trace on;
+proc glmselect data=use;
+  *by _imputation_;
+  where _imputation_ eq 1;
+  class iclevel control hloffer instcat c21enprf room board;
+  model gradRate =  iclevel control hloffer instcat c21enprf room board
+                      tuition3 roomamt boardamt sa09mct sa09mot / 
+        selection=stepwise(select=aic choose=sbc);
+run;
+
+ods trace off;
+ods select none;
+proc glmselect data=use;
+  by _imputation_;
+  class iclevel control hloffer instcat c21enprf room board;
+  model gradRate =  iclevel control hloffer instcat c21enprf room board
+                      tuition3 roomamt boardamt sa09mct sa09mot / 
+        selection=stepwise(select=aic choose=sbc);
+  ods output selectionSummary = selection parameterEstimates = Model;
+  /*put the critical information into data sets across imputations*/
+run;
+
+/**Inspect...*/
+ods select all;
+proc means data=model n min q1 median q3 max range qrange;
+  class effect;
+  var estimate;
+run;
+
+proc freq data=selection;
+  table Step*EffectEntered;
+  where step gt 0;
+run;
+
+ods graphics off;
+proc reg data=use outest=parmEsts covout;
+  model gradRate = tuition3 sa09mct;
+  by _imputation_;
+run; /**I should be able to push these results through MIANALYZE*/
+/*I could also look at how the results differ from the original, unimputed
+  data -- for variables I plan to impute, often I will build a data set
+  in advance of missing flags*/
+
+proc mianalyze data=parmEsts;
+  modeleffects intercept tuition3 sa09mct; 
 run;
