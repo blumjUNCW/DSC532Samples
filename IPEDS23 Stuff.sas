@@ -48,6 +48,8 @@ run;
 data categorical quantitative;
   set variables;
   where type eq 'Num' and substr(variable,1,3) ne 'C21';
+  /**Elim char
+      remove all Carnegie (response and others) */
 
   if anyalpha(format) then output categorical;
     else output quantitative;
@@ -113,7 +115,6 @@ run;
 
 %let c=1;
 %let var=%scan(&List,&c);
-
 %do %until(&var eq );
   proc sql;
     %if(&c eq 1) %then %do;
@@ -188,4 +189,64 @@ data FinalQuant;
   keep list;
 run;
 %put &FinalQuant;
+
+
+proc freq data=step1;
+  table c21enprf;
+  format c21enprf 1.;
+run;
+proc freq data=step1;
+  table c21enprf;
+run;
+
+ods select all;
+proc hpgenselect data=step1;
+  partition fraction(validate=.3);
+  where c21enprf ge 2;
+  class &finalCat;
+  model c21enprf(order=internal) = &finalCat &finalQuant / 
+                                dist=multinomial link=logit;
+  selection method=stepwise(choose=validate); 
+run;
+
+proc freq data=step1;
+  table c21enprf*hloffer;
+run;
+
+proc logistic data=step1 order=internal;
+  model c21enprf = bacRatio / link=logit;
+  where c21enprf ge 2;
+  format c21enprf 1.;
+  output out=BacRatio predprobs=(I);
+run;
+
+data BacRatio;
+  set BacRatio;
+  from=input(_from_,1.);
+  into=input(_into_,1.);
+run;
+proc freq data=BacRatio;
+  table from*into/nocol norow;
+  format from into c21enprf.;
+run;
+
+ods select none;
+proc logistic data=step1 order=internal;
+  class hloffer;
+  model c21enprf = bacRatio hloffer / link=logit;
+  where c21enprf ge 2;
+  format c21enprf 1.;
+  output out=HL_Bac predprobs=(I);
+run;
+
+data HL_Bac;
+  set HL_Bac;
+  from=input(_from_,1.);
+  into=input(_into_,1.);
+run;
+ods select all;
+proc freq data=HL_Bac;
+  table from*into/nocol norow;
+  format from into c21enprf.;
+run;
 
