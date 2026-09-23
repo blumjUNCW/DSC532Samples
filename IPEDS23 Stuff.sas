@@ -39,4 +39,153 @@ proc format lib=ipeds23 cntlout=IPEDS23Formats;
 run;
 
 proc contents data=step1 varnum;
+  ods output position=variables;
 run;
+
+/**Split into categorical/quantitative
+    check missing or N/A amounts*/
+
+data categorical quantitative;
+  set variables;
+  where type eq 'Num' and substr(variable,1,3) ne 'C21';
+
+  if anyalpha(format) then output categorical;
+    else output quantitative;
+run;
+
+proc freq data=step1;
+  table c21enprf;
+run;
+
+data CatList;
+  set categorical end=last;
+  length list $1500;
+  where variable not contains 'NONCRDT';
+
+  retain list;
+
+  list=catx(' ',list,variable);
+  if last then do;
+      output;
+      call symputx("CatList",list);
+  end;
+  keep list;
+run;
+%put &CatList;
+
+
+proc format;
+   value miss 
+    low-0 = 'Not defined'
+    0<-high = 'Defined'
+    ;
+run; 
+
+%macro missingCat;
+proc datasets lib=work;
+  delete missingCat;
+run;
+
+%let c=1;
+%let var=%scan(&CatList,&c);
+
+%do %until(&var eq );
+  proc freq data=step1;
+    table &var / missing;
+    format &var miss.;
+    ods output onewayfreqs=miss(keep=table percent &var rename=(&var=value)
+                                where=(value gt 0));
+  run;
+  
+  proc append base=missingCat data=miss;
+  run;
+  %let c=%eval(&c+1);
+  %let var=%scan(&CatList,&c);
+%end;
+%mend;
+ods select none;
+*%missingCat;
+
+%macro missingCheck(list);
+proc datasets lib=work;
+  delete MissingAmt;
+run;
+
+%let c=1;
+%let var=%scan(&List,&c);
+
+%do %until(&var eq );
+  proc sql;
+    %if(&c eq 1) %then %do;
+      create table MissingAmt as 
+        select "&var" as variable, sum(&var le 0)/count(&var) as missPct
+        from step1
+        ;
+    %end;
+    %else %do;
+      create table missing as 
+        select "&var" as variable, sum(&var le 0)/count(&var) as missPct
+        from step1
+        ;
+      create table MissingAmt as
+        select *
+        from missing
+        union
+        select *
+        from MissingAmt
+        ;
+    %end;
+  quit;
+  %let c=%eval(&c+1);
+  %let var=%scan(&List,&c);
+%end;
+%mend;
+ods select none;
+
+
+%missingCheck(&catlist);
+data FinalCat;
+  set MissingAmt end=last;
+  length list $1500;
+
+  retain list;
+
+  if misspct lt 0.10 then list=catx(' ',list,variable);
+  if last then do;
+      output;
+      call symputx("FinalCat",list);
+  end;
+  keep list;
+run;
+%put &FinalCat;
+
+data quantList;
+  set quantitative end=last;
+  length list $1500;
+
+  retain list;
+
+  list=catx(' ',list,variable);
+  if last then do;
+      output;
+      call symputx("QuantList",list);
+  end;
+  keep list;
+run;
+%put &QuantList;
+%missingCheck(&quantlist);
+data FinalQuant;
+  set MissingAmt end=last;
+  length list $1500;
+
+  retain list;
+
+  if misspct lt 0.10 then list=catx(' ',list,variable);
+  if last then do;
+      output;
+      call symputx("FinalQuant",list);
+  end;
+  keep list;
+run;
+%put &FinalQuant;
+
