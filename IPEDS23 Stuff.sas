@@ -35,6 +35,10 @@ data step1;
 
 run;
 
+proc sort data=step1 nodupkey;
+  by unitid;
+run;
+
 proc format lib=ipeds23 cntlout=IPEDS23Formats;
 run;
 
@@ -229,6 +233,50 @@ proc freq data=BacRatio;
   table from*into/nocol norow;
   format from into c21enprf.;
 run;
+
+ods select all;
+proc hpgenselect data=BacRatio(where=(from ne into));
+  partition fraction(validate=.3);
+  where c21enprf ge 2;
+  class &finalCat;
+  model c21enprf(order=internal) = &finalCat &finalQuant / 
+                                dist=multinomial link=logit;
+  selection method=stepwise(choose=validate); 
+run;
+
+proc logistic data=BacRatio(where=(from ne into)) order=internal;
+  model c21enprf = UGRatio SFTEINST / link=logit;
+  where c21enprf ge 2;
+  format c21enprf 1.;
+  output out=Next predprobs=(I);
+run;
+
+data Next;
+  set Next;
+  from=input(_from_2,1.);
+  into=input(_into_2,1.);
+run;
+proc freq data=Next;
+  table from*into/nocol norow;
+  format from into c21enprf.;
+run;
+
+
+ods select all;
+proc hpgenselect data=step1;
+  partition fraction(validate=.3);
+  where c21enprf ge 2;
+  class &finalCat;
+  model c21enprf(order=internal) = &finalCat &finalQuant / 
+                                dist=multinomial link=logit;
+  selection method=stepwise(choose=validate); 
+  output out=results pred role;
+  id _numeric_;
+run;
+
+
+
+/*
 
 ods select none;
 proc logistic data=step1 order=internal;
