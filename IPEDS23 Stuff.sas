@@ -32,7 +32,7 @@ data step1;
       and Fin and grads and hd and hc 
       and ic and pell and sfa; 
     /* It must have a contribution from each table */
-
+  drop instnm
 run;
 
 proc sort data=step1 nodupkey;
@@ -41,6 +41,14 @@ run;
 
 proc format lib=ipeds23 cntlout=IPEDS23Formats;
 run;
+
+data ipeds23formats;
+  set ipeds23formats;
+  where fmtname ne 'COUNTYCD' and fmtname not contains '_C';
+run;
+proc format cntlin=IPEDS23Formats;
+run;
+options fmtsearch=(work);
 
 proc contents data=step1 varnum;
   ods output position=variables;
@@ -274,7 +282,81 @@ proc hpgenselect data=step1;
   id _numeric_;
 run;
 
+proc transpose data=results out=stuff;
+  by unitid role c21enprf;
+  var pred;
+  id _level_;
+run;
 
+data predProbs;
+  set stuff;
+  IP2 = '2'n - 0;
+  IP3 = '3'n - '2'n;
+  IP4 = '4'n - '3'n;
+  IP5 = '5'n - '4'n;
+  IP6 = 1 - '5'n;
+
+  /**get classification from the max of the IP values...*/
+  maxIP = max(of IP:);
+  if maxIP eq IP2 then into=2;
+    else if maxIP eq IP3 then into=3;
+      else if maxIP eq IP4 then into=4;
+        else if maxIP eq IP5 then into=5;
+          else if maxIP eq IP6 then into=6;
+
+  keep unitid role IP: into c21enprf;
+run;
+
+options nolabel;
+proc freq data=predProbs order=internal;
+  table role*c21enprf*into;
+  format c21enprf 1.;
+  where into ne . and role ne 0;
+run;
+
+data step2;
+  set step1;
+  
+  target = c21enprf;
+  format &finalCat &finalQuant c21enprf 3.;
+  keep &finalCat &finalQuant c21enprf target;
+
+run;
+
+proc forest data=step2;
+  input hloffer / level=nominal; 
+  input bacRatio / level=interval;
+  target target / level=nominal;
+run;
+
+data ipeds23;
+  set step1;
+  where c21enprf ge 2;
+  format &finalCat &finalQuant c21enprf 3.;
+  keep &finalCat &finalQuant c21enprf;
+run;
+proc casutil;
+    droptable casdata="ipeds23" incaslib="casuser";
+    load data=work.ipeds23 
+         outcaslib="casuser" 
+         casout="ipeds23" 
+         replace;
+    promote casdata="ipeds23" incaslib="casuser";
+run;
+quit;
+
+
+proc forest data=casuser.ipeds23;
+  input hloffer / level=nominal; 
+  input bacRatio / level=interval;
+  target c21enprf / level=nominal;
+run;
+
+proc gradboost data=casuser.ipeds23;
+  input hloffer / level=nominal; 
+  input bacRatio / level=interval;
+  target c21enprf / level=nominal;
+run;
 
 /*
 
